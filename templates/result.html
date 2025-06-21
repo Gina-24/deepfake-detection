@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Deepfake Detection Result</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background-color: #f9f9f9;
+      color: #333;
+    }
+    .card {
+      margin: 20px auto;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+    h2 { text-align: center; margin-bottom: 20px; }
+    .button {
+      margin: 10px;
+      padding: 10px 20px;
+      background-color: #0d6efd;
+      border: none;
+      color: white;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .button:hover { background-color: #0b5ed7; }
+    .image-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 20px;
+    }
+    .image-stack {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+      max-width: 600px;
+    }
+    .base-image {
+      display: block;
+      width: 100%;
+      border-radius: 10px;
+    }
+    .heatmap-image {
+      transition: opacity 0.3s ease;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 2;
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .face-box {
+      position: absolute;
+      border: 1px solid red;
+      box-shadow: 0 0 2px red;
+      z-index: 3;
+    }
+    .heatmap-gallery,
+    .overlay-gallery {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    .heatmap-gallery img,
+    .overlay-gallery img {
+      width: 200px;
+      border-radius: 6px;
+    }
+    .small-img {
+      max-width: 300px;
+      border-radius: 8px;
+    }
+    .metadata-box {
+      background-color: #f9f9f9;
+      margin: 20px;
+      padding: 20px;
+      border-radius: 12px;
+    }
+    .metadata-box ul { list-style: none; padding-left: 0; }
+    .metadata-box li { margin: 5px 0; }
+    .theme-toggle {
+      position: fixed;
+      top: 10px;
+      right: 20px;
+      z-index: 1000;
+    }
+    body.dark-mode .metadata-box {
+      background-color: #121212;
+      color: #f1f1f1;
+    }
+    body.dark-mode {
+      background-color: #121212;
+      color: #f5f5f5;
+    }
+    body.dark-mode .container {
+      background-color: #1e1e1e;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container mt-4" id="result-section">
+  <div class="d-flex justify-content-between align-items-center">
+    <h2>🧠 Deepfake Detection Results</h2>
+    <button id="themeToggle" class="btn btn-sm btn-secondary">🌙 Dark Mode</button>
+  </div>
+
+  {% if not media_type.startswith('video') %}
+  <div class="image-container mt-4">
+    <div class="image-stack">
+      <img id="rawImage" src="{{ url_for('static', filename='uploads/' + filename) }}" class="base-image">
+      {% if heatmap_filename %}
+      <img id="heatmapOverlay" src="{{ url_for('static', filename=heatmap_filename) }}" style="position: absolute; top: 0; left: 0; width: 100%; opacity: 0.5; z-index: 10;">
+      {% endif %}
+      {% if overlay_paths %}
+      <img id="overlayHeatmap" src="{{ url_for('static', filename=overlay_paths[0]) }}" style="position: absolute; top: 0; left: 0; width: 100%; opacity: 0.5; z-index: 20;">
+      {% endif %}
+      {% if face_box and face_box.width > 0 and face_box.height > 0 %}
+      <div class="face-box"
+           style="position: absolute;
+           top: {{ (face_box.top / original_height) * 100 }}%;
+           left: {{ (face_box.left / original_width) * 100 }}%;
+           width: {{ (face_box.width / original_width) * 100 }}%;
+           height: {{ (face_box.height / original_height) * 100 }}%;
+           border: 2px solid red;
+           background-color: rgba(255, 0, 0, 0.15);">
+      </div>
+      {% endif %}
+    </div>
+    {% if heatmap_filename %}
+    <div class="image-controls mt-3">
+      <button class="button" id="toggleButton" onclick="toggleOverlay()">Hide Toggle Overlay Heatmap</button>
+      <label for="opacityRange" class="ms-2">Opacity:</label>
+      <input type="range" id="opacityRange" min="0" max="1" step="0.05" value="0.5">
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if media_type.startswith('video') %}
+  <div class="card mt-4 p-3">
+    <video controls width="100%">
+      <source src="{{ url_for('static', filename='uploads/' + filename) }}" type="{{ media_type }}">
+      Your browser does not support the video tag.
+    </video>
+
+    {% if heatmap_paths %}
+    <div class="heatmap-gallery mt-4">
+      <h5>Frame Heatmaps</h5>
+      <div style="display: flex; overflow-x: auto; gap: 10px; padding-bottom: 10px;">
+        {% for path in heatmap_paths|unique %}
+        <div style="flex: 0 0 auto; text-align: center;">
+          <img src="{{ url_for('static', filename='heatmaps/' + path.split('/')[-1]) }}" alt="Heatmap Frame">
+          <br>
+          <a href="{{ url_for('static', filename='heatmaps/' + path.split('/')[-1]) }}" download>
+            <button class="button btn-sm mt-1">Download</button>
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if overlay_paths %}
+    <div class="overlay-gallery mt-4">
+      <h5>Frame Overlays</h5>
+      <div style="display: flex; overflow-x: auto; gap: 10px; padding-bottom: 10px;">
+        {% for overlay_path in overlay_paths|unique %}
+        <div style="flex: 0 0 auto; text-align: center;">
+          <img src="{{ url_for('static', filename='overlays/' + overlay_path.split('/')[-1]) }}" alt="Overlay Frame" style="width: 200px; border-radius: 6px;">
+          <br>
+          <a href="{{ url_for('static', filename='overlays/' + overlay_path.split('/')[-1]) }}" download>
+            <button class="button btn-sm mt-1">Download</button>
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="row mt-4">
+    <div class="col-md-6 text-center">
+      <h4>📸 Heatmap</h4>
+      {% if heatmap_paths %}
+      <img src="{{ url_for('static', filename=heatmap_paths[0]) }}" class="img-fluid small-img mb-2" alt="Heatmap">
+      <a href="{{ url_for('static', filename=heatmap_paths[0]) }}" download class="btn btn-secondary btn-sm">Download</a>
+      {% else %}
+      <p>No heatmap available.</p>
+      {% endif %}
+    </div>
+    <div class="col-md-6 text-center">
+      <h4>🧠 Overlay</h4>
+      {% if overlay_paths %}
+      <img src="{{ url_for('static', filename=overlay_paths[0]) }}" class="img-fluid small-img mb-2" alt="Overlay">
+      <a href="{{ url_for('static', filename=overlay_paths[0]) }}" download class="btn btn-primary btn-sm">Download Overlay</a>
+      {% else %}
+      <p>No overlay available.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="metadata-box mt-4">
+    <h5>📁 File Metadata</h5>
+    <ul>
+      <li><strong>File Name:</strong> {{ filename }}</li>
+      <li><strong>Type:</strong> {{ media_type }}</li>
+      <li><strong>File Size:</strong> {{ file_size }} KB</li>
+      <li><strong>Detection Time:</strong> {{ detection_time }}</li>
+      <li><strong>Processing Duration:</strong> {{ elapsed_time }} seconds</li>
+      <li><strong>Confidence:</strong> {{ '%.2f' % (confidence) }}%</li>
+      <li><strong>Result:</strong>
+        {% if result == 'REAL' %}
+        <span style="color: green;"><strong>REAL ✅</strong></span>
+        {% else %}
+        <span style="color: red;"><strong>FAKE ⚠️</strong></span>
+        {% endif %}
+      </li>
+    </ul>
+  </div>
+
+  {% if chart_data %}
+  <div class="mt-5">
+    <h5 class="text-center">📊 Frame-by-Frame Confidence</h5>
+    <canvas id="confidenceChart" height="120"></canvas>
+  </div>
+  {% endif %}
+
+  <div class="text-center mt-4 mb-5">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">🔁 Upload Another</a>
+  </div>
+</div>
+
+<script>
+  function toggleOverlay() {
+    const overlay = document.getElementById("overlayHeatmap");
+    const button = document.getElementById("toggleButton");
+    if (overlay.style.display === "none") {
+      overlay.style.display = "block";
+      button.textContent = "Hide Toggle Overlay Heatmap";
+    } else {
+      overlay.style.display = "none";
+      button.textContent = "Show Toggle Overlay Heatmap";
+    }
+  }
+
+  window.onload = () => {
+    const themeToggle = document.getElementById("themeToggle");
+    const body = document.body;
+
+    if (localStorage.getItem("theme") === "dark") {
+      body.classList.add("dark-mode");
+      themeToggle.textContent = "☀️ Light Mode";
+    }
+
+    themeToggle.addEventListener("click", () => {
+      body.classList.toggle("dark-mode");
+      const isDark = body.classList.contains("dark-mode");
+      localStorage.setItem("theme", isDark ? "dark" : "light");
+      themeToggle.textContent = isDark ? "☀️ Light Mode" : "🌙 Dark Mode";
+    });
+
+    const heatmapImg = document.getElementById("heatmapOverlay");
+    const opacitySlider = document.getElementById("opacityRange");
+    if (opacitySlider && heatmapImg) {
+      opacitySlider.addEventListener("input", () => {
+        heatmapImg.style.opacity = opacitySlider.value;
+      });
+    }
+
+    document.getElementById("result-section").scrollIntoView({ behavior: "smooth" });
+  };
+</script>
+
+{% if chart_data %}
+<script>
+  const ctx = document.getElementById("confidenceChart").getContext("2d");
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: {{ chart_data.labels | safe }},
+      datasets: [{
+        label: 'Confidence (%)',
+        data: {{ chart_data.values | safe }},
+        borderColor: 'rgba(75,192,192,1)',
+        fill: false,
+        tension: 0.1
+      }]
+    },
+    options: {
+      scales: { y: { min: 0, max: 100 } }
+    }
+  });
+</script>
+{% endif %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

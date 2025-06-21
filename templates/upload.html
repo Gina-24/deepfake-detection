@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Media - Deepfake Detector</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(to right, #1f4037, #99f2c8);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+        }
+        .upload-container {
+            background-color: rgba(0, 0, 0, 0.75);
+            padding: 30px;
+            border-radius: 15px;
+            width: 360px;
+            text-align: center;
+            animation: fadeIn 1s ease-in-out;
+        }
+        h2 {
+            margin-bottom: 20px;
+        }
+        input[type="file"] {
+            width: 100%;
+            margin: 15px 0;
+            padding: 5px;
+        }
+        input[type="submit"] {
+            background-color: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #218838;
+        }
+        .back-link, .logout-link {
+            display: block;
+            margin-top: 10px;
+            text-decoration: none;
+            color: #ccc;
+        }
+        .back-link:hover, .logout-link:hover {
+            text-decoration: underline;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .flash-message {
+            background-color: #17a2b8;
+            color: white;
+            padding: 5px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="upload-container">
+        <h2>Upload Media File</h2>
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <div id="flash-message" style="padding: 5px; background-color: #d4edda; color: #155724; margin: 10px 0; border: 1px solid #c3e6cb; border-radius: 5px;">
+      {% for message in messages %}
+        <p>{{ message }}</p>
+      {% endfor %}
+    </div>
+    <script>
+      setTimeout(function() {
+        var flash = document.getElementById('flash-message');
+        if (flash) {
+          flash.style.display = 'none';
+        }
+      }, 10000); // 10000 second
+    </script>
+  {% endif %}
+{% endwith %}
+
+        <!-- Upload Form -->
+              <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data">
+                      <input type="file" name="media" required>
+                      <button type="submit">Upload</button>
+               </form>
+
+        <a class="back-link" href="/">← Back to Home</a>
+        <a class="logout-link" href="{{ url_for('logout') }}">Logout</a>
+    </div>
+</body>
+    <script>
+  setTimeout(function () {
+    var msg = document.getElementById("flash-message");
+    if (msg) {
+      msg.style.display = 'none';
+    }
+  }, 4000); // hides after 4 seconds
+</script>
+
+</html>
